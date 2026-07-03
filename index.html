@@ -72,14 +72,14 @@
     border-radius: 8px;
     padding: 40px;
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
     gap: 32px;
     align-items: end;
     margin-bottom: 48px;
     box-shadow: 0 14px 30px -14px rgba(0, 0, 0, 0.55);
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 980px) {
     .controls { grid-template-columns: 1fr; }
   }
 
@@ -353,6 +353,15 @@
         <button type="button" class="seg-btn" data-level="H">H<small>約30%</small></button>
       </div>
     </div>
+
+    <div class="field">
+      <span class="field-label">マーカーの角</span>
+      <div class="segmented" id="corner-group">
+        <button type="button" class="seg-btn" data-corner="single">一部だけ<small>外側の1隅</small></button>
+        <button type="button" class="seg-btn" data-corner="all">全部丸く<small>4隅とも</small></button>
+        <button type="button" class="seg-btn" data-corner="square">直角<small>丸めない</small></button>
+      </div>
+    </div>
   </div>
 
   <p class="status-msg" id="status-msg"></p>
@@ -403,8 +412,9 @@ Minimum version required to store current data is: `+y+`.
     const statusMsg = document.getElementById('status-msg');
     const sizeGroup = document.getElementById('size-group');
     const levelGroup = document.getElementById('level-group');
+    const cornerGroup = document.getElementById('corner-group');
 
-    const state = { size: 256, level: 'M' };
+    const state = { size: 256, level: 'M', corner: 'single' };
 
     function relLuminance(hex) {
       const c = hex.replace('#', '');
@@ -460,8 +470,12 @@ Minimum version required to store current data is: `+y+`.
       }
     }
 
-    // Only the corner touching the QR's own outer edge is rounded; the other 3 stay square.
-    function outerCornerRadii(anchorRow, anchorCol, n, r) {
+    // 'single': only the corner touching the QR's own outer edge is rounded.
+    // 'all': every corner of the marker is rounded.
+    // 'square': no rounding.
+    function cornerRadii(anchorRow, anchorCol, n, r, style) {
+      if (style === 'square') return [0, 0, 0, 0];
+      if (style === 'all') return [r, r, r, r];
       const isTop = anchorRow === 0;
       const isLeft = anchorCol === 0;
       if (isTop && isLeft) return [r, 0, 0, 0];
@@ -470,24 +484,24 @@ Minimum version required to store current data is: `+y+`.
       return [0, 0, r, 0];
     }
 
-    function drawRoundedFinder(ctx, anchorRow, anchorCol, marginModules, cell, bg, grad, n) {
+    function drawRoundedFinder(ctx, anchorRow, anchorCol, marginModules, cell, bg, grad, n, cornerStyle) {
       const x0 = (anchorCol + marginModules) * cell;
       const y0 = (anchorRow + marginModules) * cell;
 
       ctx.fillStyle = grad;
-      roundRectPath(ctx, x0, y0, 7 * cell, 7 * cell, outerCornerRadii(anchorRow, anchorCol, n, cell));
+      roundRectPath(ctx, x0, y0, 7 * cell, 7 * cell, cornerRadii(anchorRow, anchorCol, n, cell, cornerStyle));
       ctx.fill();
 
       ctx.fillStyle = bg;
-      roundRectPath(ctx, x0 + cell, y0 + cell, 5 * cell, 5 * cell, outerCornerRadii(anchorRow, anchorCol, n, cell));
+      roundRectPath(ctx, x0 + cell, y0 + cell, 5 * cell, 5 * cell, cornerRadii(anchorRow, anchorCol, n, cell, cornerStyle));
       ctx.fill();
 
       ctx.fillStyle = grad;
-      roundRectPath(ctx, x0 + 2 * cell, y0 + 2 * cell, 3 * cell, 3 * cell, outerCornerRadii(anchorRow, anchorCol, n, cell));
+      roundRectPath(ctx, x0 + 2 * cell, y0 + 2 * cell, 3 * cell, 3 * cell, cornerRadii(anchorRow, anchorCol, n, cell, cornerStyle));
       ctx.fill();
     }
 
-    function renderToWorkCanvas(modules, sizePx, marginModules, bg, stops) {
+    function renderToWorkCanvas(modules, sizePx, marginModules, bg, stops, cornerStyle) {
       const n = modules.size;
       const total = n + marginModules * 2;
       const cell = sizePx / total;
@@ -511,7 +525,7 @@ Minimum version required to store current data is: `+y+`.
         }
       }
 
-      anchors.forEach(([ar, ac]) => drawRoundedFinder(workCtx, ar, ac, marginModules, cell, bg, grad, n));
+      anchors.forEach(([ar, ac]) => drawRoundedFinder(workCtx, ar, ac, marginModules, cell, bg, grad, n, cornerStyle));
     }
 
     // Same corner convention as roundRectPath/outerCornerRadii: [tl, tr, br, bl].
@@ -541,7 +555,7 @@ Minimum version required to store current data is: `+y+`.
       }
     }
 
-    function buildSvg(modules, sizePx, marginModules, bg, stops) {
+    function buildSvg(modules, sizePx, marginModules, bg, stops, cornerStyle) {
       const n = modules.size;
       const total = n + marginModules * 2;
       const anchors = finderAnchors(n);
@@ -557,9 +571,9 @@ Minimum version required to store current data is: `+y+`.
       let finders = '';
       anchors.forEach(([ar, ac]) => {
         const x0 = ac + marginModules, y0 = ar + marginModules;
-        const radii7 = outerCornerRadii(ar, ac, n, 1);
-        const radii5 = outerCornerRadii(ar, ac, n, 1);
-        const radii3 = outerCornerRadii(ar, ac, n, 1);
+        const radii7 = cornerRadii(ar, ac, n, 1, cornerStyle);
+        const radii5 = cornerRadii(ar, ac, n, 1, cornerStyle);
+        const radii3 = cornerRadii(ar, ac, n, 1, cornerStyle);
         finders +=
           '<path d="' + roundedSquarePathD(x0, y0, 7, radii7) + '" fill="url(#g)"/>' +
           '<path d="' + roundedSquarePathD(x0 + 1, y0 + 1, 5, radii5) + '" fill="' + bg + '"/>' +
@@ -658,7 +672,7 @@ Minimum version required to store current data is: `+y+`.
       grid.querySelectorAll('.dl-btn').forEach((b) => (b.disabled = false));
 
       combos.forEach((c, i) => {
-        renderToWorkCanvas(currentModules, state.size, 4, c.bg, c.stops);
+        renderToWorkCanvas(currentModules, state.size, 4, c.bg, c.stops, state.corner);
         const dataUri = workCanvas.toDataURL('image/png');
         const decodesOk = decodeCheck(url);
         const ratio = contrastRatio(
@@ -700,6 +714,14 @@ Minimum version required to store current data is: `+y+`.
       renderAll();
     });
 
+    cornerGroup.addEventListener('click', function (e) {
+      const btn = e.target.closest('.seg-btn');
+      if (!btn) return;
+      state.corner = btn.dataset.corner;
+      setActive(cornerGroup, 'corner', state.corner);
+      renderAll();
+    });
+
     grid.addEventListener('click', function (e) {
       const btn = e.target.closest('.dl-btn');
       if (!btn || btn.disabled || !currentModules) return;
@@ -710,12 +732,12 @@ Minimum version required to store current data is: `+y+`.
       const filename = 'qrcode_' + combo.name + '_' + state.level + '_' + state.size + 'px.' + format;
 
       if (format === 'svg') {
-        const svg = buildSvg(currentModules, state.size, 4, combo.bg, combo.stops);
+        const svg = buildSvg(currentModules, state.size, 4, combo.bg, combo.stops, state.corner);
         downloadDataUri('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), filename);
         return;
       }
 
-      renderToWorkCanvas(currentModules, state.size, 4, combo.bg, combo.stops);
+      renderToWorkCanvas(currentModules, state.size, 4, combo.bg, combo.stops, state.corner);
       const mime = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png';
       const dataUri = workCanvas.toDataURL(mime, 0.92);
 
@@ -731,6 +753,7 @@ Minimum version required to store current data is: `+y+`.
     buildCards();
     setActive(sizeGroup, 'size', state.size);
     setActive(levelGroup, 'level', state.level);
+    setActive(cornerGroup, 'corner', state.corner);
     renderAll();
   })();
 </script>
