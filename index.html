@@ -190,9 +190,8 @@
   }
 
   .qr-frame {
-    background: #fff;
-    border-radius: 4px;
-    padding: 10px;
+    border-radius: 6px;
+    padding: 22px;
     flex: none;
     line-height: 0;
   }
@@ -429,6 +428,50 @@ Minimum version required to store current data is: `+y+`.
     const workCanvas = document.createElement('canvas');
     const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
 
+    function finderAnchors(n) {
+      return [
+        [0, 0],
+        [n - 7, 0],
+        [0, n - 7],
+      ];
+    }
+
+    function inFinderZone(r, c, anchors) {
+      return anchors.some(([ar, ac]) => r >= ar && r < ar + 7 && c >= ac && c < ac + 7);
+    }
+
+    function roundRectPath(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+      }
+    }
+
+    function drawRoundedFinder(ctx, anchorRow, anchorCol, marginModules, cell, bg, grad) {
+      const x0 = (anchorCol + marginModules) * cell;
+      const y0 = (anchorRow + marginModules) * cell;
+
+      ctx.fillStyle = grad;
+      roundRectPath(ctx, x0, y0, 7 * cell, 7 * cell, 7 * cell * 0.28);
+      ctx.fill();
+
+      ctx.fillStyle = bg;
+      roundRectPath(ctx, x0 + cell, y0 + cell, 5 * cell, 5 * cell, 5 * cell * 0.28);
+      ctx.fill();
+
+      ctx.fillStyle = grad;
+      roundRectPath(ctx, x0 + 2 * cell, y0 + 2 * cell, 3 * cell, 3 * cell, 3 * cell * 0.28);
+      ctx.fill();
+    }
+
     function renderToWorkCanvas(modules, sizePx, marginModules, bg, stops) {
       const n = modules.size;
       const total = n + marginModules * 2;
@@ -442,13 +485,18 @@ Minimum version required to store current data is: `+y+`.
       stops.forEach((s, i) => grad.addColorStop(i / (stops.length - 1), s));
       workCtx.fillStyle = grad;
 
+      const anchors = finderAnchors(n);
+
       for (let r = 0; r < n; r++) {
         for (let c = 0; c < n; c++) {
+          if (inFinderZone(r, c, anchors)) continue;
           if (modules.get(r, c)) {
             workCtx.fillRect((c + marginModules) * cell, (r + marginModules) * cell, cell + 0.6, cell + 0.6);
           }
         }
       }
+
+      anchors.forEach(([ar, ac]) => drawRoundedFinder(workCtx, ar, ac, marginModules, cell, bg, grad));
     }
 
     function decodeCheck(expectedUrl) {
@@ -464,22 +512,33 @@ Minimum version required to store current data is: `+y+`.
     function buildSvg(modules, sizePx, marginModules, bg, stops) {
       const n = modules.size;
       const total = n + marginModules * 2;
+      const anchors = finderAnchors(n);
       let rects = '';
       for (let r = 0; r < n; r++) {
         for (let c = 0; c < n; c++) {
+          if (inFinderZone(r, c, anchors)) continue;
           if (modules.get(r, c)) {
             rects += '<rect x="' + (c + marginModules) + '" y="' + (r + marginModules) + '" width="1" height="1"/>';
           }
         }
       }
+      let finders = '';
+      anchors.forEach(([ar, ac]) => {
+        const x0 = ac + marginModules, y0 = ar + marginModules;
+        finders +=
+          '<rect x="' + x0 + '" y="' + y0 + '" width="7" height="7" rx="1.96" fill="url(#g)"/>' +
+          '<rect x="' + (x0 + 1) + '" y="' + (y0 + 1) + '" width="5" height="5" rx="1.4" fill="' + bg + '"/>' +
+          '<rect x="' + (x0 + 2) + '" y="' + (y0 + 2) + '" width="3" height="3" rx="0.84" fill="url(#g)"/>';
+      });
       const stopDefs = stops.map((s, i) =>
         '<stop offset="' + (i / (stops.length - 1) * 100).toFixed(2) + '%" stop-color="' + s + '"/>'
       ).join('');
       return '<svg xmlns="http://www.w3.org/2000/svg" width="' + sizePx + '" height="' + sizePx +
-        '" viewBox="0 0 ' + total + ' ' + total + '" shape-rendering="crispEdges">' +
+        '" viewBox="0 0 ' + total + ' ' + total + '">' +
         '<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="' + total + '" y2="' + total + '">' + stopDefs + '</linearGradient></defs>' +
         '<rect width="' + total + '" height="' + total + '" fill="' + bg + '"/>' +
-        '<g fill="url(#g)">' + rects + '</g>' +
+        '<g fill="url(#g)" shape-rendering="crispEdges">' + rects + '</g>' +
+        finders +
         '</svg>';
     }
 
@@ -573,7 +632,9 @@ Minimum version required to store current data is: `+y+`.
         );
 
         const card = grid.querySelector('.card[data-index="' + i + '"]');
-        const img = card.querySelector('.qr-frame img');
+        const frame = card.querySelector('.qr-frame');
+        const img = frame.querySelector('img');
+        frame.style.background = c.bg;
         img.src = dataUri;
         card.querySelector('.ratio').textContent = 'contrast ' + ratio.toFixed(1) + ':1';
         const badge = card.querySelector('.badge');
