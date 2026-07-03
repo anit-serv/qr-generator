@@ -475,15 +475,15 @@ Minimum version required to store current data is: `+y+`.
       const y0 = (anchorRow + marginModules) * cell;
 
       ctx.fillStyle = grad;
-      roundRectPath(ctx, x0, y0, 7 * cell, 7 * cell, outerCornerRadii(anchorRow, anchorCol, n, 7 * cell * 0.32));
+      roundRectPath(ctx, x0, y0, 7 * cell, 7 * cell, outerCornerRadii(anchorRow, anchorCol, n, cell));
       ctx.fill();
 
       ctx.fillStyle = bg;
-      roundRectPath(ctx, x0 + cell, y0 + cell, 5 * cell, 5 * cell, outerCornerRadii(anchorRow, anchorCol, n, 5 * cell * 0.32));
+      roundRectPath(ctx, x0 + cell, y0 + cell, 5 * cell, 5 * cell, outerCornerRadii(anchorRow, anchorCol, n, cell));
       ctx.fill();
 
       ctx.fillStyle = grad;
-      roundRectPath(ctx, x0 + 2 * cell, y0 + 2 * cell, 3 * cell, 3 * cell, outerCornerRadii(anchorRow, anchorCol, n, 3 * cell * 0.32));
+      roundRectPath(ctx, x0 + 2 * cell, y0 + 2 * cell, 3 * cell, 3 * cell, outerCornerRadii(anchorRow, anchorCol, n, cell));
       ctx.fill();
     }
 
@@ -557,9 +557,9 @@ Minimum version required to store current data is: `+y+`.
       let finders = '';
       anchors.forEach(([ar, ac]) => {
         const x0 = ac + marginModules, y0 = ar + marginModules;
-        const radii7 = outerCornerRadii(ar, ac, n, 7 * 0.32);
-        const radii5 = outerCornerRadii(ar, ac, n, 5 * 0.32);
-        const radii3 = outerCornerRadii(ar, ac, n, 3 * 0.32);
+        const radii7 = outerCornerRadii(ar, ac, n, 1);
+        const radii5 = outerCornerRadii(ar, ac, n, 1);
+        const radii3 = outerCornerRadii(ar, ac, n, 1);
         finders +=
           '<path d="' + roundedSquarePathD(x0, y0, 7, radii7) + '" fill="url(#g)"/>' +
           '<path d="' + roundedSquarePathD(x0 + 1, y0 + 1, 5, radii5) + '" fill="' + bg + '"/>' +
