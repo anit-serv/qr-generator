@@ -440,35 +440,50 @@ Minimum version required to store current data is: `+y+`.
       return anchors.some(([ar, ac]) => r >= ar && r < ar + 7 && c >= ac && c < ac + 7);
     }
 
-    function roundRectPath(ctx, x, y, w, h, r) {
+    // radii order matches CSS border-radius: [top-left, top-right, bottom-right, bottom-left]
+    function roundRectPath(ctx, x, y, w, h, radii) {
+      const [tl, tr, br, bl] = radii;
       ctx.beginPath();
       if (ctx.roundRect) {
-        ctx.roundRect(x, y, w, h, r);
+        ctx.roundRect(x, y, w, h, radii);
       } else {
-        const rr = Math.min(r, w / 2, h / 2);
-        ctx.moveTo(x + rr, y);
-        ctx.arcTo(x + w, y, x + w, y + h, rr);
-        ctx.arcTo(x + w, y + h, x, y + h, rr);
-        ctx.arcTo(x, y + h, x, y, rr);
-        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.moveTo(x + tl, y);
+        ctx.lineTo(x + w - tr, y);
+        if (tr) ctx.arcTo(x + w, y, x + w, y + tr, tr);
+        ctx.lineTo(x + w, y + h - br);
+        if (br) ctx.arcTo(x + w, y + h, x + w - br, y + h, br);
+        ctx.lineTo(x + bl, y + h);
+        if (bl) ctx.arcTo(x, y + h, x, y + h - bl, bl);
+        ctx.lineTo(x, y + tl);
+        if (tl) ctx.arcTo(x, y, x + tl, y, tl);
         ctx.closePath();
       }
     }
 
-    function drawRoundedFinder(ctx, anchorRow, anchorCol, marginModules, cell, bg, grad) {
+    // Only the corner touching the QR's own outer edge is rounded; the other 3 stay square.
+    function outerCornerRadii(anchorRow, anchorCol, n, r) {
+      const isTop = anchorRow === 0;
+      const isLeft = anchorCol === 0;
+      if (isTop && isLeft) return [r, 0, 0, 0];
+      if (isTop && !isLeft) return [0, r, 0, 0];
+      if (!isTop && isLeft) return [0, 0, 0, r];
+      return [0, 0, r, 0];
+    }
+
+    function drawRoundedFinder(ctx, anchorRow, anchorCol, marginModules, cell, bg, grad, n) {
       const x0 = (anchorCol + marginModules) * cell;
       const y0 = (anchorRow + marginModules) * cell;
 
       ctx.fillStyle = grad;
-      roundRectPath(ctx, x0, y0, 7 * cell, 7 * cell, 7 * cell * 0.28);
+      roundRectPath(ctx, x0, y0, 7 * cell, 7 * cell, outerCornerRadii(anchorRow, anchorCol, n, 7 * cell * 0.32));
       ctx.fill();
 
       ctx.fillStyle = bg;
-      roundRectPath(ctx, x0 + cell, y0 + cell, 5 * cell, 5 * cell, 5 * cell * 0.28);
+      roundRectPath(ctx, x0 + cell, y0 + cell, 5 * cell, 5 * cell, outerCornerRadii(anchorRow, anchorCol, n, 5 * cell * 0.32));
       ctx.fill();
 
       ctx.fillStyle = grad;
-      roundRectPath(ctx, x0 + 2 * cell, y0 + 2 * cell, 3 * cell, 3 * cell, 3 * cell * 0.28);
+      roundRectPath(ctx, x0 + 2 * cell, y0 + 2 * cell, 3 * cell, 3 * cell, outerCornerRadii(anchorRow, anchorCol, n, 3 * cell * 0.32));
       ctx.fill();
     }
 
@@ -496,7 +511,24 @@ Minimum version required to store current data is: `+y+`.
         }
       }
 
-      anchors.forEach(([ar, ac]) => drawRoundedFinder(workCtx, ar, ac, marginModules, cell, bg, grad));
+      anchors.forEach(([ar, ac]) => drawRoundedFinder(workCtx, ar, ac, marginModules, cell, bg, grad, n));
+    }
+
+    // Same corner convention as roundRectPath/outerCornerRadii: [tl, tr, br, bl].
+    function roundedSquarePathD(x, y, s, radii) {
+      const [tl, tr, br, bl] = radii;
+      const x2 = x + s, y2 = y + s;
+      let d = 'M' + (x + tl) + ' ' + y;
+      d += ' L' + (x2 - tr) + ' ' + y;
+      if (tr) d += ' A' + tr + ' ' + tr + ' 0 0 1 ' + x2 + ' ' + (y + tr);
+      d += ' L' + x2 + ' ' + (y2 - br);
+      if (br) d += ' A' + br + ' ' + br + ' 0 0 1 ' + (x2 - br) + ' ' + y2;
+      d += ' L' + (x + bl) + ' ' + y2;
+      if (bl) d += ' A' + bl + ' ' + bl + ' 0 0 1 ' + x + ' ' + (y2 - bl);
+      d += ' L' + x + ' ' + (y + tl);
+      if (tl) d += ' A' + tl + ' ' + tl + ' 0 0 1 ' + (x + tl) + ' ' + y;
+      d += ' Z';
+      return d;
     }
 
     function decodeCheck(expectedUrl) {
@@ -525,10 +557,13 @@ Minimum version required to store current data is: `+y+`.
       let finders = '';
       anchors.forEach(([ar, ac]) => {
         const x0 = ac + marginModules, y0 = ar + marginModules;
+        const radii7 = outerCornerRadii(ar, ac, n, 7 * 0.32);
+        const radii5 = outerCornerRadii(ar, ac, n, 5 * 0.32);
+        const radii3 = outerCornerRadii(ar, ac, n, 3 * 0.32);
         finders +=
-          '<rect x="' + x0 + '" y="' + y0 + '" width="7" height="7" rx="1.96" fill="url(#g)"/>' +
-          '<rect x="' + (x0 + 1) + '" y="' + (y0 + 1) + '" width="5" height="5" rx="1.4" fill="' + bg + '"/>' +
-          '<rect x="' + (x0 + 2) + '" y="' + (y0 + 2) + '" width="3" height="3" rx="0.84" fill="url(#g)"/>';
+          '<path d="' + roundedSquarePathD(x0, y0, 7, radii7) + '" fill="url(#g)"/>' +
+          '<path d="' + roundedSquarePathD(x0 + 1, y0 + 1, 5, radii5) + '" fill="' + bg + '"/>' +
+          '<path d="' + roundedSquarePathD(x0 + 2, y0 + 2, 3, radii3) + '" fill="url(#g)"/>';
       });
       const stopDefs = stops.map((s, i) =>
         '<stop offset="' + (i / (stops.length - 1) * 100).toFixed(2) + '%" stop-color="' + s + '"/>'
